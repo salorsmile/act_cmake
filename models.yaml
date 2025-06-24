@@ -1,0 +1,16 @@
+﻿models:
+  fall_recognition:
+    estimator_bmodel_path: "models/pose_estimator_int8.bmodel"
+    detector_bmodel_path: "models/detector_int8_4b.bmodel"
+    classifier_bmodel_path: "models/action_recognition_fp32_1b.bmodel"
+    img_shape: [256, 192]
+    detector_prob_threshold: 0.7
+    disable_filter: false
+    skeleton_visible: true
+    visualized_frame: false
+    init_func_name: "init_fall_recognition_pipeline"
+    function_name: "inference_fall_recognition_pipeline"
+    model_type: act_recog
+    class_names:  ["fall", "normal"]
+    
+    enable_log: true
