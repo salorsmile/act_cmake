@@ -188,212 +188,239 @@ void FalldetectionPipeline::video_inference() {
 	cap.release();
 }
 
+
+
 ActionInferenceResult FalldetectionPipeline::inference(const cv::Mat& frame) {
-	if (frame.empty()) {
-		throw std::runtime_error("输入帧为空");
-	}
+    if (frame.empty()) {
+        throw std::runtime_error("输入帧为空");
+    }
 
-	cv::Mat frame_copy = frame.clone();
-	if (frame_copy.type() != CV_8UC3) {
-		cv::cvtColor(frame_copy, frame_copy, cv::COLOR_YUV2BGR);
-		if (frame_copy.type() != CV_8UC3) {
-			throw std::runtime_error("帧格式转换失败，类型: " + std::to_string(frame_copy.type()));
-		}
-	}
+    cv::Mat frame_copy = frame.clone();
+    if (frame_copy.type() != CV_8UC3) {
+        cv::cvtColor(frame_copy, frame_copy, cv::COLOR_YUV2BGR);
+        if (frame_copy.type() != CV_8UC3) {
+            throw std::runtime_error("帧格式转换失败，类型: " + std::to_string(frame_copy.type()));
+        }
+    }
 
-	double before = cv::getTickCount() / cv::getTickFrequency() * 1000;
+    double before = cv::getTickCount() / cv::getTickFrequency() * 1000;
 
-	bm_handle_t handle;
-	bm_status_t status = bm_dev_request(&handle, dev_id_);
-	if (status != BM_SUCCESS) {
-		throw std::runtime_error("无法请求设备，状态=" + std::to_string(status));
-	}
+    bm_handle_t handle;
+    bm_status_t status = bm_dev_request(&handle, dev_id_);
+    if (status != BM_SUCCESS) {
+        throw std::runtime_error("无法请求设备，状态=" + std::to_string(status));
+    }
 
-	bm_image bm_img;
-	bm_image_create(handle, frame_copy.rows, frame_copy.cols, FORMAT_BGR_PACKED, DATA_TYPE_EXT_1N_BYTE, &bm_img);
-	bm_image_alloc_dev_mem(bm_img, BMCV_IMAGE_FOR_IN);
-	cv::bmcv::toBMI(frame_copy, &bm_img);
+    bm_image bm_img;
+    bm_image_create(handle, frame_copy.rows, frame_copy.cols, FORMAT_BGR_PACKED, DATA_TYPE_EXT_1N_BYTE, &bm_img);
+    bm_image_alloc_dev_mem(bm_img, BMCV_IMAGE_FOR_IN);
+    cv::bmcv::toBMI(frame_copy, &bm_img);
 
-	double det_time = cv::getTickCount() / cv::getTickFrequency() * 1000;
+    double det_time = cv::getTickCount() / cv::getTickFrequency() * 1000;
 
-	std::vector<YoloV5BoxVec> yolov5_boxes;
-	std::vector<bm_image> batch_imgs = { bm_img };
-	if (!yolov5_) {
-		bm_image_destroy(bm_img);
-		bm_dev_free(handle);
-		throw std::runtime_error("YoloV5 未初始化");
-	}
-	yolov5_->Detect(batch_imgs, yolov5_boxes);
+    std::vector<YoloV5BoxVec> yolov5_boxes;
+    std::vector<bm_image> batch_imgs = { bm_img };
+    if (!yolov5_) {
+        bm_image_destroy(bm_img);
+        bm_dev_free(handle);
+        throw std::runtime_error("YoloV5 未初始化");
+    }
+    yolov5_->Detect(batch_imgs, yolov5_boxes);
 
-	double track_time = cv::getTickCount() / cv::getTickFrequency() * 1000;
+    double track_time = cv::getTickCount() / cv::getTickFrequency() * 1000;
 
-	// 清空当前帧的推理状态
-	humans_.clear();
-	scaled_humans_.clear();
-	labels_.clear();
-	probs_.clear();
-	online_targets_.clear();
+    // 清空当前帧的推理状态
+    humans_.clear();
+    scaled_humans_.clear();
+    labels_.clear();
+    probs_.clear();
+    online_targets_.targets.clear();
 
-	humans_.reserve(10);
-	scaled_humans_.reserve(10);
-	labels_.reserve(10);
-	probs_.reserve(10);
+    humans_.reserve(10);
+    scaled_humans_.reserve(10);
+    labels_.reserve(10);
+    probs_.reserve(10);
 
-	if (!yolov5_boxes.empty() && !yolov5_boxes[0].empty()) {
-		bytetrack_->update(online_targets_, yolov5_boxes[0]);
-		counter_++;
+    if (!yolov5_boxes.empty() && !yolov5_boxes[0].empty()) {
+        STracks stracks; // 临时存储 BYTETracker 的输出
+        bytetrack_->update(stracks, yolov5_boxes[0]);
+        counter_++;
 
-		for (const auto& box : online_targets_) {
-			YoloV5Box person_box;
-			person_box.x = box->tlwh[0];
-			person_box.y = box->tlwh[1];
-			person_box.width = box->tlwh[2];
-			person_box.height = box->tlwh[3];
-			person_box.score = box->score;
-			person_box.class_id = box->class_id;
+        // 将 STracks 转换为 TrackInfo
+        online_targets_.targets.reserve(stracks.size());
+        for (const auto& box : stracks) {
+            TrackEntry entry;
+            entry.track_id = box->track_id;
+            entry.state = box->state;
+            entry.tlbr = box->tlbr; // 直接使用 tlbr
+            entry.frame_id = box->frame_id;
+            entry.tracklet_len = box->tracklet_len;
+            entry.start_frame = box->start_frame;
+            entry.score = box->score;
+            entry.class_id = box->class_id;
+            online_targets_.targets.push_back(entry);
+        }
 
-			std::vector<cv::Point2f> keypoints;
-			std::vector<float> maxvals;
-			std::vector<cv::Mat> heatmaps;
-			hrnet_pose_->poseEstimate(bm_img, person_box, keypoints, maxvals, heatmaps);
+        for (const auto& box : online_targets_.targets) {
+            YoloV5Box person_box;
+            // 从 tlbr 转换为 tlwh
+            person_box.x = box.tlbr[0]; // top-left x
+            person_box.y = box.tlbr[1]; // top-left y
+            person_box.width = box.tlbr[2] - box.tlbr[0]; // right - left
+            person_box.height = box.tlbr[3] - box.tlbr[1]; // bottom - top
+            person_box.score = box.score;
+            person_box.class_id = box.class_id;
 
-			if (!args_.disable_filter && !keypoints.empty()) {
-				keypoints = filter_->predict(keypoints, 1.0f / 30.0f);
-				std::vector<cv::Point2f> scaled_keypoints = keypoints;
-				for (auto& pt : scaled_keypoints) {
-					pt.x /= 384.0f;
-					pt.y /= 512.0f;
-				}
-				scaled_keypoints = scaled_filter_->predict(scaled_keypoints, 1.0f / 30.0f);
-				humans_.push_back(keypoints);
-				scaled_humans_.push_back(scaled_keypoints);
-			}
-			else {
-				humans_.push_back(keypoints);
-				std::vector<cv::Point2f> scaled_keypoints = keypoints;
-				for (auto& pt : scaled_keypoints) {
-					pt.x /= 384.0f;
-					pt.y /= 512.0f;
-				}
-				scaled_humans_.push_back(scaled_keypoints);
-			}
-		}
+            std::vector<cv::Point2f> keypoints;
+            std::vector<float> maxvals;
+            std::vector<cv::Mat> heatmaps;
+            hrnet_pose_->poseEstimate(bm_img, person_box, keypoints, maxvals, heatmaps);
 
-		double estimation_time = cv::getTickCount() / cv::getTickFrequency() * 1000;
+            if (!args_.disable_filter && !keypoints.empty()) {
+                keypoints = filter_->predict(keypoints, 1.0f / 30.0f);
+                std::vector<cv::Point2f> scaled_keypoints = keypoints;
+                for (auto& pt : scaled_keypoints) {
+                    pt.x /= 384.0f;
+                    pt.y /= 512.0f;
+                }
+                scaled_keypoints = scaled_filter_->predict(scaled_keypoints, 1.0f / 30.0f);
+                humans_.push_back(keypoints);
+                scaled_humans_.push_back(scaled_keypoints);
+            }
+            else {
+                humans_.push_back(keypoints);
+                std::vector<cv::Point2f> scaled_keypoints = keypoints;
+                for (auto& pt : scaled_keypoints) {
+                    pt.x /= 384.0f;
+                    pt.y /= 512.0f;
+                }
+                scaled_humans_.push_back(scaled_keypoints);
+            }
+        }
 
-		// 清理过期的跟踪目标
-		std::vector<int> active_track_ids;
-		active_track_ids.reserve(online_targets_.size());
-		for (const auto& box : online_targets_) {
-			active_track_ids.push_back(box->track_id);
-		}
-		for (auto it = frames_buffer_.begin(); it != frames_buffer_.end();) {
-			if (std::find(active_track_ids.begin(), active_track_ids.end(), it->first) == active_track_ids.end()) {
-				it = frames_buffer_.erase(it);
-			}
-			else {
-				++it;
-			}
-		}
+        double estimation_time = cv::getTickCount() / cv::getTickFrequency() * 1000;
 
-		// 更新 frames_buffer_ 和动作识别
-		for (size_t idx = 0; idx < online_targets_.size(); ++idx) {
-			int track_id = online_targets_[idx]->track_id;
-			if (args_.enable_log) {
-				std::cout << "frame " << counter_ << ": targets " << idx << ", track_id=" << track_id << "\n";
-			}
-			frames_buffer_[track_id].push_back(scaled_humans_[idx]);
-			if (frames_buffer_[track_id].size() > static_cast<size_t>(args_.seg)) {
-				frames_buffer_[track_id].erase(frames_buffer_[track_id].begin());
-			}
-			if (frames_buffer_[track_id].size() >= static_cast<size_t>(args_.seg)) {
-				auto [label, prob] = classifier_->infer(frames_buffer_[track_id]);
-				if (label == args_.class_names[0]) { // "fall"
-					text_duration_ = 30;
-				}
-				labels_.push_back(label);
-				probs_.push_back(prob);
-			}
-			else {
-				labels_.push_back("Tracking");
-				probs_.push_back(0.0f);
-			}
-		}
+        // 清理过期的跟踪目标
+        std::vector<int> active_track_ids;
+        active_track_ids.reserve(online_targets_.targets.size());
+        for (const auto& box : online_targets_.targets) {
+            active_track_ids.push_back(box.track_id);
+        }
+        for (auto it = frames_buffer_.begin(); it != frames_buffer_.end();) {
+            if (std::find(active_track_ids.begin(), active_track_ids.end(), it->first) == active_track_ids.end()) {
+                it = frames_buffer_.erase(it);
+            }
+            else {
+                ++it;
+            }
+        }
 
-		double end = cv::getTickCount() / cv::getTickFrequency() * 1000;
+        // 更新 frames_buffer_ 和动作识别
+        for (size_t idx = 0; idx < online_targets_.targets.size(); ++idx) {
+            int track_id = online_targets_.targets[idx].track_id;
+            if (args_.enable_log) {
+                std::cout << "frame " << counter_ << ": targets " << idx << ", track_id=" << track_id << "\n";
+            }
+            frames_buffer_[track_id].push_back(scaled_humans_[idx]);
+            if (frames_buffer_[track_id].size() > static_cast<size_t>(args_.seg)) {
+                frames_buffer_[track_id].erase(frames_buffer_[track_id].begin());
+            }
+            if (frames_buffer_[track_id].size() >= static_cast<size_t>(args_.seg)) {
+                auto [label, prob] = classifier_->infer(frames_buffer_[track_id]);
+                if (label == args_.class_names[0]) { // "fall"
+                    text_duration_ = 30;
+                }
+                labels_.push_back(label);
+                probs_.push_back(prob);
+            }
+            else {
+                labels_.push_back("Tracking");
+                probs_.push_back(0.0f);
+            }
+        }
 
-		if (args_.enable_log) {
-			std::cout << "frame " << counter_ << ": detected " << online_targets_.size() << " targets\n";
-			std::cout << "activate track ID: ";
-			for (const auto& box : online_targets_) {
-				std::cout << box->track_id << " ";
-			}
-			std::cout << "\nframes_buffer_size: " << frames_buffer_.size() << "\n";
-			for (size_t i = 0; i < online_targets_.size(); ++i) {
-				std::cout << "  target " << online_targets_[i]->track_id
-					<< ": label=" << labels_[i] << ", prob=" << probs_[i]
-					<< ", kpts=" << humans_[i].size() << "\n";
-			}
-			std::cout << "总耗时: " << (end - before) << "ms/帧"
-				<< "\t检测: " << (det_time - before) << "ms"
-				<< "\t跟踪: " << (track_time - det_time) << "ms"
-				<< "\t姿态估计: " << (estimation_time - track_time) << "ms"
-				<< "\t动作识别: " << (end - estimation_time) << "ms\n";
-		}
-	}
+        double end = cv::getTickCount() / cv::getTickFrequency() * 1000;
 
-	if (text_duration_ > 0) {
-		cv::putText(frame_copy, "Fall detected " + std::to_string(30 - text_duration_) + " frame ago!!",
-			cv::Point(0, 25), cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(0, 0, 255), 1);
-		text_duration_--;
-	}
+        if (args_.enable_log) {
+            std::cout << "frame " << counter_ << ": detected " << online_targets_.targets.size() << " targets\n";
+            std::cout << "activate track ID: ";
+            for (const auto& box : online_targets_.targets) {
+                std::cout << box.track_id << " ";
+            }
+            std::cout << "\nframes_buffer_size: " << frames_buffer_.size() << "\n";
+            for (size_t i = 0; i < online_targets_.targets.size(); ++i) {
+                std::cout << "  target " << online_targets_.targets[i].track_id
+                    << ": label=" << labels_[i] << ", prob=" << probs_[i]
+                    << ", kpts=" << humans_[i].size() << "\n";
+            }
+            std::cout << "总耗时: " << (end - before) << "ms/帧"
+                << "\t检测: " << (det_time - before) << "ms"
+                << "\t跟踪: " << (track_time - det_time) << "ms"
+                << "\t姿态估计: " << (estimation_time - track_time) << "ms"
+                << "\t动作识别: " << (end - estimation_time) << "ms\n";
+        }
+    }
 
-	// 准备返回结果
-	ActionInferenceResult result;
+    if (text_duration_ > 0) {
+        cv::putText(frame_copy, "Fall detected " + std::to_string(30 - text_duration_) + " frame ago!!",
+            cv::Point(0, 25), cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(0, 0, 255), 1);
+        text_duration_--;
+    }
 
-	if (args_.visualized_frame) { result.visualized_frame = visualize(frame_copy, humans_, online_targets_, labels_, probs_, args_.skeleton_visible); }
-	else { result.visualized_frame = NULL; }
+    // 准备返回结果
+    ActionInferenceResult result;
 
+    if (args_.visualized_frame) {
+        result.visualized_frame = visualize(frame_copy, humans_, online_targets_, labels_, probs_, args_.skeleton_visible);
+    }
+    else {
+        result.visualized_frame = cv::Mat();
+    }
 
-	result.humans = humans_;
-	result.online_targets = online_targets_;
-	result.labels = labels_;
-	result.probs = probs_;
+    result.humans = humans_;
+    result.online_targets = online_targets_;
+    result.labels = labels_;
+    result.probs = probs_;
 
-	bm_image_destroy(bm_img);
-	bm_dev_free(handle);
+    bm_image_destroy(bm_img);
+    bm_dev_free(handle);
 
-	return result;
+    return result;
 }
 
 void FalldetectionPipeline::reset() {
-	counter_ = 0;
-	text_duration_ = 0;
-	frames_buffer_.clear();
-	humans_.clear();
-	scaled_humans_.clear();
-	online_targets_.clear();
-	labels_.clear();
-	probs_.clear();
-	bytetrack_ = std::make_unique<BYTETracker>(bytetrack_params{ 0.1f, 30, 0.95f });
+    counter_ = 0;
+    text_duration_ = 0;
+    frames_buffer_.clear();
+    humans_.clear();
+    scaled_humans_.clear();
+    online_targets_.targets.clear();
+    labels_.clear();
+    probs_.clear();
+    bytetrack_ = std::make_unique<BYTETracker>(bytetrack_params{ 0.1f, 30, 0.95f });
 }
 
 cv::Mat FalldetectionPipeline::visualize(cv::Mat frame, const std::vector<std::vector<cv::Point2f>>& keypoints,
-	const STracks& boxes, const std::vector<std::string>& labels,
-	const std::vector<float>& probs, bool vis_skeleton) {
-	for (size_t i = 0; i < boxes.size(); ++i) {
-		auto box = boxes[i];
-		cv::rectangle(frame, cv::Point(box->tlwh[0], box->tlwh[1]),
-			cv::Point(box->tlwh[0] + box->tlwh[2], box->tlwh[1] + box->tlwh[3]),
-			cv::Scalar(0, 0, 255), 2);
+    const TrackInfo& boxes, const std::vector<std::string>& labels,
+    const std::vector<float>& probs, bool vis_skeleton) {
+    for (size_t i = 0; i < boxes.targets.size(); ++i) {
+        const auto& box = boxes.targets[i];
+        // 从 tlbr 转换为 tlwh 以进行绘制
+        float x1 = box.tlbr[0];
+        float y1 = box.tlbr[1];
+        float x2 = box.tlbr[2];
+        float y2 = box.tlbr[3];
+        cv::rectangle(frame, cv::Point(x1, y1),
+            cv::Point(x2, y2),
+            cv::Scalar(0, 0, 255), 2);
 
-		std::string label_text = probs[i] == 0 ? labels[i] : labels[i] + " : " + std::to_string(probs[i] * 100) + "%";
-		cv::putText(frame, label_text, cv::Point(box->tlwh[0], box->tlwh[1] + 20),
-			cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+        std::string label_text = probs[i] == 0 ? labels[i] : labels[i] + " : " + std::to_string(probs[i] * 100) + "%";
+        cv::putText(frame, label_text, cv::Point(x1, y1 + 20),
+            cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
 
-		if (vis_skeleton && i < keypoints.size()) {
-			hrnet_pose_->drawPose(keypoints[i], frame);
-		}
-	}
-	return frame;
+        if (vis_skeleton && i < keypoints.size()) {
+            hrnet_pose_->drawPose(keypoints[i], frame);
+        }
+    }
+    return frame;
 }

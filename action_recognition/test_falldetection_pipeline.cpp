@@ -1,4 +1,4 @@
-// test_falldetection.c
+ï»¿// test_falldetection.c
 #include "falldetection_handle.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,7 +6,7 @@
 #include <dlfcn.h>
 #include <opencv2/opencv2.hpp>
 
-// º¯ÊıÖ¸Õë¶¨Òå
+// å‡½æ•°æŒ‡é’ˆå®šä¹‰
 typedef FalldetectionHandle(*CreateFunc)(const char*, int);
 typedef void (*DestroyFunc)(FalldetectionHandle);
 typedef int (*InferenceFunc)(FalldetectionHandle, const unsigned char*, int, int, int, CActionInferenceResult*);
@@ -15,22 +15,22 @@ typedef void (*ResetFunc)(FalldetectionHandle);
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "ÓÃ·¨: %s <ÊÓÆµÂ·¾¶»òÍ¼ÏñÂ·¾¶> [Éè±¸ID]\n", argv[0]);
+        fprintf(stderr, "ç”¨æ³•: %s <è§†é¢‘è·¯å¾„æˆ–å›¾åƒè·¯å¾„> [è®¾å¤‡ID]\n", argv[0]);
         return 1;
     }
 
-    // ½âÎöÃüÁîĞĞ²ÎÊı
+    // è§£æå‘½ä»¤è¡Œå‚æ•°
     const char* input_path = argv[1];
     int dev_id = (argc > 2) ? atoi(argv[2]) : 0;
 
-    // ¶¯Ì¬¼ÓÔØ¹²Ïí¿â
+    // åŠ¨æ€åŠ è½½å…±äº«åº“
     void* lib_handle = dlopen("libfalldetection.so", RTLD_LAZY);
     if (!lib_handle) {
-        fprintf(stderr, "ÎŞ·¨¼ÓÔØ¹²Ïí¿â: %s\n", dlerror());
+        fprintf(stderr, "æ— æ³•åŠ è½½å…±äº«åº“: %s\n", dlerror());
         return 1;
     }
 
-    // ¼ÓÔØº¯Êı
+    // åŠ è½½å‡½æ•°
     CreateFunc create = (CreateFunc)dlsym(lib_handle, "falldetection_create");
     DestroyFunc destroy = (DestroyFunc)dlsym(lib_handle, "falldetection_destroy");
     InferenceFunc inference = (InferenceFunc)dlsym(lib_handle, "falldetection_inference");
@@ -38,107 +38,107 @@ int main(int argc, char* argv[]) {
     ResetFunc reset = (ResetFunc)dlsym(lib_handle, "falldetection_reset");
 
     if (!create || !destroy || !inference || !free_result || !reset) {
-        fprintf(stderr, "ÎŞ·¨¼ÓÔØº¯Êı: %s\n", dlerror());
+        fprintf(stderr, "æ— æ³•åŠ è½½å‡½æ•°: %s\n", dlerror());
         dlclose(lib_handle);
         return 1;
     }
 
-    // ´´½¨¾ä±ú
+    // åˆ›å»ºå¥æŸ„
     FalldetectionHandle handle = create("../models.yaml", dev_id);
     if (!handle) {
-        fprintf(stderr, "´´½¨ FalldetectionHandle Ê§°Ü\n");
+        fprintf(stderr, "åˆ›å»º FalldetectionHandle å¤±è´¥\n");
         dlclose(lib_handle);
         return 1;
     }
 
-    // ´ò¿ªÊÓÆµ
+    // æ‰“å¼€è§†é¢‘
     cv::VideoCapture cap(input_path);
     if (!cap.isOpened()) {
-        fprintf(stderr, "ÎŞ·¨´ò¿ªÊÓÆµÎÄ¼ş: %s\n", input_path);
+        fprintf(stderr, "æ— æ³•æ‰“å¼€è§†é¢‘æ–‡ä»¶: %s\n", input_path);
         destroy(handle);
         dlclose(lib_handle);
         return 1;
     }
 
-    // »ñÈ¡ÊÓÆµÊôĞÔ
+    // è·å–è§†é¢‘å±æ€§
     int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
     int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
     double fps = cap.get(cv::CAP_PROP_FPS);
     if (width <= 0 || height <= 0 || fps <= 0) {
-        fprintf(stderr, "ÎŞĞ§µÄÊÓÆµÊôĞÔ: width=%d, height=%d, fps=%.2f\n", width, height, fps);
+        fprintf(stderr, "æ— æ•ˆçš„è§†é¢‘å±æ€§: width=%d, height=%d, fps=%.2f\n", width, height, fps);
         cap.release();
         destroy(handle);
         dlclose(lib_handle);
         return 1;
     }
 
-    // ³õÊ¼»¯Êä³öÊÓÆµ
+    // åˆå§‹åŒ–è¾“å‡ºè§†é¢‘
     char output_path[256];
     snprintf(output_path, sizeof(output_path), "output_%s", strrchr(input_path, '/') ? strrchr(input_path, '/') + 1 : input_path);
     cv::VideoWriter out(output_path, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), fps, cv::Size(width, height));
     if (!out.isOpened()) {
-        fprintf(stderr, "ÎŞ·¨´ò¿ªÊä³öÊÓÆµÎÄ¼ş: %s\n", output_path);
+        fprintf(stderr, "æ— æ³•æ‰“å¼€è¾“å‡ºè§†é¢‘æ–‡ä»¶: %s\n", output_path);
         cap.release();
         destroy(handle);
         dlclose(lib_handle);
         return 1;
     }
-    printf("±£´æÊÓÆµµ½: %s\n", output_path);
+    printf("ä¿å­˜è§†é¢‘åˆ°: %s\n", output_path);
 
-    // ÖğÖ¡´¦Àí
+    // é€å¸§å¤„ç†
     int frame_count = 0;
     while (1) {
         cv::Mat frame;
         if (!cap.read(frame)) {
-            printf("ÊÓÆµ´¦ÀíÍê³É£¬¹² %d Ö¡\n", frame_count);
+            printf("è§†é¢‘å¤„ç†å®Œæˆï¼Œå…± %d å¸§\n", frame_count);
             break;
         }
         if (frame.empty()) {
-            fprintf(stderr, "¶ÁÈ¡µ½¿ÕÖ¡£¬Ìø¹ı\n");
+            fprintf(stderr, "è¯»å–åˆ°ç©ºå¸§ï¼Œè·³è¿‡\n");
             continue;
         }
 
-        // È·±£Ö¡¸ñÊ½Îª BGR
+        // ç¡®ä¿å¸§æ ¼å¼ä¸º BGR
         if (frame.type() != CV_8UC3) {
             cv::cvtColor(frame, frame, cv::COLOR_YUV2BGR);
             if (frame.type() != CV_8UC3) {
-                fprintf(stderr, "Ö¡¸ñÊ½×ª»»Ê§°Ü£¬ÀàĞÍ: %d\n", frame.type());
+                fprintf(stderr, "å¸§æ ¼å¼è½¬æ¢å¤±è´¥ï¼Œç±»å‹: %d\n", frame.type());
                 continue;
             }
         }
 
-        // Ö´ĞĞÍÆÀí
+        // æ‰§è¡Œæ¨ç†
         CActionInferenceResult result;
         memset(&result, 0, sizeof(CActionInferenceResult));
         int ret = inference(handle, frame.data, frame.cols, frame.rows, frame.channels(), &result);
         if (ret == 0) {
-            // ´òÓ¡ÍÆÀí½á¹û
-            printf("Ö¡ %d: ¼ì²âµ½ %d ¸öÄ¿±ê\n", frame_count, result.online_targets.target_count);
+            // æ‰“å°æ¨ç†ç»“æœ
+            printf("å¸§ %d: æ£€æµ‹åˆ° %d ä¸ªç›®æ ‡\n", frame_count, result.online_targets.target_count);
             for (int i = 0; i < result.label_count; ++i) {
-                printf("  Ä¿±ê %d: ±êÇ©=%s, ¸ÅÂÊ=%.2f, ¹Ø¼üµãÊı=%d\n",
+                printf("  ç›®æ ‡ %d: æ ‡ç­¾=%s, æ¦‚ç‡=%.2f, å…³é”®ç‚¹æ•°=%d\n",
                     result.online_targets.targets[i].track_id,
                     result.labels[i],
                     result.probs[i],
                     result.humans[i].point_count);
             }
 
-            // ±£´æ¿ÉÊÓ»¯Ö¡
+            // ä¿å­˜å¯è§†åŒ–å¸§
             if (result.visualized_frame_data) {
                 cv::Mat vis_frame(result.frame_height, result.frame_width, CV_8UC3, result.visualized_frame_data);
                 out.write(vis_frame);
             }
 
-            // ÊÍ·Å½á¹û
+            // é‡Šæ”¾ç»“æœ
             free_result(&result);
         }
         else {
-            fprintf(stderr, "Ö¡ %d ÍÆÀíÊ§°Ü: %d\n", frame_count, ret);
+            fprintf(stderr, "å¸§ %d æ¨ç†å¤±è´¥: %d\n", frame_count, ret);
         }
 
         frame_count++;
     }
 
-    // ÇåÀí
+    // æ¸…ç†
     out.release();
     cap.release();
     reset(handle);

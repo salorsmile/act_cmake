@@ -17,10 +17,10 @@
 
 
 // 定义导出宏
-#ifdef __linux__
-#define EXPORT_API __attribute__((visibility("default")))
+#ifdef _WIN32
+#define EXPORT_API __declspec(dllexport)
 #else
-#define EXPORT_API
+#define EXPORT_API __attribute__((visibility("default")))
 #endif
 
 // 前向声明
@@ -31,12 +31,29 @@ class HRNetPose;
 class ActionRecognition;
 class OneEuroFilter;
 class TimeStamp;
-using STracks = std::vector<std::shared_ptr<STrack>>;
+
+
+// 定义单个跟踪目标的信息
+struct TrackEntry {
+	int track_id;          // 跟踪ID
+	int state;             // 跟踪状态
+	std::vector<float> tlbr; // 边界框 (top-left-bottom-right)
+	int frame_id;          // 当前帧ID
+	int tracklet_len;      // 跟踪持续时间
+	int start_frame;       // 跟踪开始帧
+	float score;           // 检测得分
+	int class_id;          // 类别ID
+};
+
+// 定义跟踪信息，包含多个跟踪目标
+struct TrackInfo {
+	std::vector<TrackEntry> targets; // 跟踪目标列表
+};
 
 struct EXPORT_API ActionInferenceResult {
 	cv::Mat visualized_frame; // 可视化后的帧
 	std::vector<std::vector<cv::Point2f>> humans; // 人的关键点
-	STracks online_targets; // 跟踪信息
+	TrackInfo online_targets; // 跟踪信息
 	std::vector<std::string> labels; // 动作标签
 	std::vector<float> probs; // 动作概率
 };
@@ -49,7 +66,7 @@ public:
 	~FalldetectionPipeline();
 
 	// 处理视频流
-	void video_inference();
+	void video_inference();// 测试函数
 
 	// 处理单帧图像
 	ActionInferenceResult inference(const cv::Mat& frame);
@@ -82,8 +99,9 @@ private:
 	void parse_config(const std::string& config_path);
 	void init_models();
 	cv::Mat visualize(cv::Mat frame, const std::vector<std::vector<cv::Point2f>>& keypoints,
-		const STracks& boxes, const std::vector<std::string>& labels,
+		const TrackInfo& boxes, const std::vector<std::string>& labels,
 		const std::vector<float>& probs, bool vis_skeleton);
+
 
 	Args args_;
 	int dev_id_;
@@ -102,7 +120,7 @@ private:
 	// 推理状态变量
 	std::vector<std::vector<cv::Point2f>> humans_;
 	std::vector<std::vector<cv::Point2f>> scaled_humans_;
-	STracks online_targets_;
+	TrackInfo online_targets_;
 	std::vector<std::string> labels_;
 	std::vector<float> probs_;
 };
