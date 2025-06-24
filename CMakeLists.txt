@@ -185,7 +185,7 @@ elseif (${TARGET_ARCH} STREQUAL "soc")
     )
 
     # 生成动态库
-    add_library(action_recognition SHARED ${SRC_FILES})
+    add_library(action_recognition SHARED ${SRC_FILES} "dynamic_load_client.cpp")
     target_link_libraries(action_recognition
         ${OpenCV_LIBS}
         yaml-cpp
@@ -199,7 +199,7 @@ elseif (${TARGET_ARCH} STREQUAL "soc")
     )
      
     # 生成可执行文件
-    add_executable(action_recognition_pipeline.soc ${SRC_FILES})
+    add_executable(action_recognition_pipeline.soc ${SRC_FILES} "dynamic_load_client.cpp")
     target_link_libraries(action_recognition_pipeline.soc 
         ${BM_LIBS} 
         ${OPENCV_LIBS} 
