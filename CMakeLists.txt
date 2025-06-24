@@ -185,7 +185,7 @@ elseif (${TARGET_ARCH} STREQUAL "soc")
     )
 
     # 生成动态库
-    add_library(action_recognition SHARED ${SRC_FILES} "dynamic_load_client.cpp")
+    add_library(action_recognition SHARED ${SRC_FILES})
     target_link_libraries(action_recognition
         ${OpenCV_LIBS}
         yaml-cpp
@@ -199,7 +199,7 @@ elseif (${TARGET_ARCH} STREQUAL "soc")
     )
      
     # 生成可执行文件
-    add_executable(action_recognition_pipeline.soc ${SRC_FILES} "dynamic_load_client.cpp")
+    add_executable(action_recognition_pipeline.soc ${SRC_FILES} "${CMAKE_SOURCE_DIR}/action_recognition/test_falldetection_pipeline.cpp")
     target_link_libraries(action_recognition_pipeline.soc 
         ${BM_LIBS} 
         ${OPENCV_LIBS} 
@@ -208,6 +208,7 @@ elseif (${TARGET_ARCH} STREQUAL "soc")
         -lavformat  
         -lavutil
         yaml-cpp
+        dl
     )
 
 else()

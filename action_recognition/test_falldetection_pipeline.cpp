@@ -1,10 +1,10 @@
-// test_falldetection_pipeline.cpp
+ï»¿// test_falldetection_pipeline.cpp
 #include "falldetection_handle.h"
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <dlfcn.h>
 
-// º¯ÊýÖ¸Õë¶¨Òå
+// å‡½æ•°æŒ‡é’ˆå®šä¹‰
 typedef FalldetectionHandle(*CreateFunc)(const char*, int);
 typedef void (*DestroyFunc)(FalldetectionHandle);
 typedef int (*InferenceFunc)(FalldetectionHandle, void*, CActionInferenceResult*);
@@ -13,7 +13,7 @@ typedef void (*ResetFunc)(FalldetectionHandle);
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "ÓÃ·¨: " << argv[0] << " <ÊÓÆµÂ·¾¶»òÍ¼ÏñÂ·¾¶> [Éè±¸ID]" << std::endl;
+        std::cerr << "ç”¨æ³•: " << argv[0] << " <è§†é¢‘è·¯å¾„æˆ–å›¾åƒè·¯å¾„> [è®¾å¤‡ID]" << std::endl;
         return 1;
     }
 
@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
 
     void* lib_handle = dlopen("./libaction_recognition.so", RTLD_LAZY);
     if (!lib_handle) {
-        std::cerr << "ÎÞ·¨¼ÓÔØ¹²Ïí¿â: " << dlerror() << std::endl;
+        std::cerr << "æ— æ³•åŠ è½½å…±äº«åº“: " << dlerror() << std::endl;
         return 1;
     }
 
@@ -33,21 +33,21 @@ int main(int argc, char* argv[]) {
     ResetFunc reset = (ResetFunc)dlsym(lib_handle, "falldetection_reset");
 
     if (!create || !destroy || !inference || !free_result || !reset) {
-        std::cerr << "ÎÞ·¨¼ÓÔØº¯Êý: " << dlerror() << std::endl;
+        std::cerr << "æ— æ³•åŠ è½½å‡½æ•°: " << dlerror() << std::endl;
         dlclose(lib_handle);
         return 1;
     }
 
     FalldetectionHandle handle = create("../models.yaml", dev_id);
     if (!handle) {
-        std::cerr << "´´½¨ FalldetectionHandle Ê§°Ü" << std::endl;
+        std::cerr << "åˆ›å»º FalldetectionHandle å¤±è´¥" << std::endl;
         dlclose(lib_handle);
         return 1;
     }
 
     cv::VideoCapture cap(input_path);
     if (!cap.isOpened()) {
-        std::cerr << "ÎÞ·¨´ò¿ªÊÓÆµÎÄ¼þ: " << input_path << std::endl;
+        std::cerr << "æ— æ³•æ‰“å¼€è§†é¢‘æ–‡ä»¶: " << input_path << std::endl;
         destroy(handle);
         dlclose(lib_handle);
         return 1;
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
     double fps = cap.get(cv::CAP_PROP_FPS);
     if (width <= 0 || height <= 0 || fps <= 0) {
-        std::cerr << "ÎÞÐ§µÄÊÓÆµÊôÐÔ: width=" << width << ", height=" << height << ", fps=" << fps << std::endl;
+        std::cerr << "æ— æ•ˆçš„è§†é¢‘å±žæ€§: width=" << width << ", height=" << height << ", fps=" << fps << std::endl;
         cap.release();
         destroy(handle);
         dlclose(lib_handle);
@@ -67,30 +67,30 @@ int main(int argc, char* argv[]) {
     std::string output_path = "output_" + std::string(strrchr(input_path, '/') ? strrchr(input_path, '/') + 1 : input_path);
     cv::VideoWriter out(output_path, cv::VideoWriter::fourcc('X', 'V', 'I', 'D'), fps, cv::Size(width, height));
     if (!out.isOpened()) {
-        std::cerr << "ÎÞ·¨´ò¿ªÊä³öÊÓÆµÎÄ¼þ: " << output_path << std::endl;
+        std::cerr << "æ— æ³•æ‰“å¼€è¾“å‡ºè§†é¢‘æ–‡ä»¶: " << output_path << std::endl;
         cap.release();
         destroy(handle);
         dlclose(lib_handle);
         return 1;
     }
-    std::cout << "±£´æÊÓÆµµ½: " << output_path << std::endl;
+    std::cout << "ä¿å­˜è§†é¢‘åˆ°: " << output_path << std::endl;
 
     int frame_count = 0;
     while (true) {
         cv::Mat frame;
         if (!cap.read(frame)) {
-            std::cout << "ÊÓÆµ´¦ÀíÍê³É£¬¹² " << frame_count << " Ö¡" << std::endl;
+            std::cout << "è§†é¢‘å¤„ç†å®Œæˆï¼Œå…± " << frame_count << " å¸§" << std::endl;
             break;
         }
         if (frame.empty()) {
-            std::cerr << "¶ÁÈ¡µ½¿ÕÖ¡£¬Ìø¹ý" << std::endl;
+            std::cerr << "è¯»å–åˆ°ç©ºå¸§ï¼Œè·³è¿‡" << std::endl;
             continue;
         }
 
         if (frame.type() != CV_8UC3) {
             cv::cvtColor(frame, frame, cv::COLOR_YUV2BGR);
             if (frame.type() != CV_8UC3) {
-                std::cerr << "Ö¡¸ñÊ½×ª»»Ê§°Ü£¬ÀàÐÍ: " << frame.type() << std::endl;
+                std::cerr << "å¸§æ ¼å¼è½¬æ¢å¤±è´¥ï¼Œç±»åž‹: " << frame.type() << std::endl;
                 continue;
             }
         }
@@ -99,13 +99,13 @@ int main(int argc, char* argv[]) {
         std::memset(&result, 0, sizeof(CActionInferenceResult));
         int ret = inference(handle, &frame, &result);
         if (ret == 0) {
-            std::cout << "Ö¡ " << frame_count << ": ¼ì²âµ½ " << result.online_targets.target_count << " ¸öÄ¿±ê" << std::endl;
+            std::cout << "å¸§ " << frame_count << ": æ£€æµ‹åˆ° " << result.online_targets.target_count << " ä¸ªç›®æ ‡" << std::endl;
             int max_count = std::min({ result.label_count, result.human_count, result.online_targets.target_count });
             for (int i = 0; i < max_count; ++i) {
-                std::cout << "  Ä¿±ê " << result.online_targets.targets[i].track_id
-                    << ": ±êÇ©=" << (result.labels[i] ? result.labels[i] : "N/A")
-                    << ", ¸ÅÂÊ=" << result.probs[i]
-                    << ", ¹Ø¼üµãÊý=" << result.humans[i].point_count << std::endl;
+                std::cout << "  ç›®æ ‡ " << result.online_targets.targets[i].track_id
+                    << ": æ ‡ç­¾=" << (result.labels[i] ? result.labels[i] : "N/A")
+                    << ", æ¦‚çŽ‡=" << result.probs[i]
+                    << ", å…³é”®ç‚¹æ•°=" << result.humans[i].point_count << std::endl;
             }
 
             if (result.visualized_frame_data) {
@@ -113,13 +113,13 @@ int main(int argc, char* argv[]) {
                 if (vis_frame.type() != CV_8UC3) {
                     cv::cvtColor(vis_frame, vis_frame, cv::COLOR_RGB2BGR);
                 }
-                // ±£´æµ÷ÊÔÍ¼Ïñ
+                // ä¿å­˜è°ƒè¯•å›¾åƒ
                 std::string debug_image = "debug_frame_" + std::to_string(frame_count) + ".png";
                 cv::imwrite(debug_image, vis_frame);
-                std::cout << "±£´æµ÷ÊÔÍ¼Ïñ: " << debug_image << std::endl;
-                // ¼ì²é³ß´ç
+                std::cout << "ä¿å­˜è°ƒè¯•å›¾åƒ: " << debug_image << std::endl;
+                // æ£€æŸ¥å°ºå¯¸
                 if (result.frame_width != width || result.frame_height != height) {
-                    std::cerr << "Ö¡³ß´ç²»Æ¥Åä: result=(" << result.frame_width << "," << result.frame_height
+                    std::cerr << "å¸§å°ºå¯¸ä¸åŒ¹é…: result=(" << result.frame_width << "," << result.frame_height
                         << "), expected=(" << width << "," << height << ")" << std::endl;
                 }
                 out.write(vis_frame);
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
             free_result(&result);
         }
         else {
-            std::cerr << "Ö¡ " << frame_count << " ÍÆÀíÊ§°Ü: " << ret << std::endl;
+            std::cerr << "å¸§ " << frame_count << " æŽ¨ç†å¤±è´¥: " << ret << std::endl;
         }
 
         frame_count++;
