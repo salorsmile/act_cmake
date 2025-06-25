@@ -3,6 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <dlfcn.h>
+#include <opencv2/opencv2.hpp>
 
 // 函数指针定义
 typedef FalldetectionHandle(*CreateFunc)(const char*, int);
@@ -17,6 +18,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 解析命令行参数
     const char* input_path = argv[1];
     int dev_id = (argc > 2) ? std::atoi(argv[2]) : 0;
 
@@ -26,6 +28,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 加载函数
     CreateFunc create = (CreateFunc)dlsym(lib_handle, "falldetection_create");
     DestroyFunc destroy = (DestroyFunc)dlsym(lib_handle, "falldetection_destroy");
     InferenceFunc inference = (InferenceFunc)dlsym(lib_handle, "falldetection_inference");
@@ -38,6 +41,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 创建句柄
     FalldetectionHandle handle = create("../models.yaml", dev_id);
     if (!handle) {
         std::cerr << "创建 FalldetectionHandle 失败" << std::endl;
@@ -45,6 +49,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 打开视频
     cv::VideoCapture cap(input_path);
     if (!cap.isOpened()) {
         std::cerr << "无法打开视频文件: " << input_path << std::endl;
@@ -53,6 +58,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 获取视频属性
     int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
     int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
     double fps = cap.get(cv::CAP_PROP_FPS);
@@ -75,6 +81,7 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "保存视频到: " << output_path << std::endl;
 
+    // 逐帧处理
     int frame_count = 0;
     while (true) {
         cv::Mat frame;
@@ -87,6 +94,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        // 确保帧格式为 BGR
         if (frame.type() != CV_8UC3) {
             cv::cvtColor(frame, frame, cv::COLOR_YUV2BGR);
             if (frame.type() != CV_8UC3) {
@@ -95,6 +103,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // 执行推理
         CActionInferenceResult result;
         std::memset(&result, 0, sizeof(CActionInferenceResult));
         int ret = inference(handle, &frame, &result);
@@ -108,6 +117,7 @@ int main(int argc, char* argv[]) {
                     << ", 关键点数=" << result.humans[i].point_count << std::endl;
             }
 
+            // 保存可视化帧
             if (result.visualized_frame_data) {
                 cv::Mat vis_frame(result.frame_height, result.frame_width, CV_8UC3, result.visualized_frame_data);
                 std::cout << "vis_frame type: " << vis_frame.type() << ", channels: " << vis_frame.channels() << std::endl;
@@ -139,6 +149,7 @@ int main(int argc, char* argv[]) {
                 out.write(vis_frame);
             }
 
+            // 释放结果
             free_result(&result);
         }
         else {
@@ -148,6 +159,7 @@ int main(int argc, char* argv[]) {
         frame_count++;
     }
 
+    // 清理
     out.release();
     cap.release();
     reset(handle);
