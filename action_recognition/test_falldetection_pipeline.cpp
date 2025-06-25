@@ -1,9 +1,7 @@
-﻿// test_falldetection_pipeline.cpp
-#include "falldetection_handle.h"
+﻿#include <dlfcn.h>﻿
 #include <opencv2/opencv.hpp>
 #include <iostream>
-#include <dlfcn.h>
-#include <opencv2/opencv2.hpp>
+#include "falldetection_handle.h"
 
 // 函数指针定义
 typedef FalldetectionHandle(*CreateFunc)(const char*, int);
@@ -22,6 +20,7 @@ int main(int argc, char* argv[]) {
     const char* input_path = argv[1];
     int dev_id = (argc > 2) ? std::atoi(argv[2]) : 0;
 
+    // 加载共享库
     void* lib_handle = dlopen("./libaction_recognition.so", RTLD_LAZY);
     if (!lib_handle) {
         std::cerr << "无法加载共享库: " << dlerror() << std::endl;
@@ -42,7 +41,7 @@ int main(int argc, char* argv[]) {
     }
 
     // 创建句柄
-    FalldetectionHandle handle = create("../models.yaml", dev_id);
+    FalldetectionHandle handle = create("./models.yaml", dev_id);
     if (!handle) {
         std::cerr << "创建 FalldetectionHandle 失败" << std::endl;
         dlclose(lib_handle);
@@ -70,6 +69,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 初始化视频写入器
     std::string output_path = "output_" + std::string(strrchr(input_path, '/') ? strrchr(input_path, '/') + 1 : input_path);
     cv::VideoWriter out(output_path, cv::VideoWriter::fourcc('H', '2', '6', '4'), fps, cv::Size(width, height));
     if (!out.isOpened()) {
@@ -120,14 +120,20 @@ int main(int argc, char* argv[]) {
             // 保存可视化帧
             if (result.visualized_frame_data) {
                 cv::Mat vis_frame(result.frame_height, result.frame_width, CV_8UC3, result.visualized_frame_data);
-                std::cout << "vis_frame type: " << vis_frame.type() << ", channels: " << vis_frame.channels() << std::endl;
-                if (vis_frame.type() != CV_8UC3) {
-                    std::cerr << "Unexpected frame type: " << vis_frame.type() << ", converting to CV_8UC3" << std::endl;
-                    cv::cvtColor(vis_frame, vis_frame, cv::COLOR_RGBA2BGR);
-                    if (vis_frame.type() != CV_8UC3) {
-                        std::cerr << "Format conversion failed" << std::endl;
-                    }
+                std::cout << "vis_frame size: " << vis_frame.cols << "x" << vis_frame.rows
+                    << ", step: " << vis_frame.step
+                    << ", expected width: " << result.frame_width
+                    << ", expected height: " << result.frame_height << std::endl;
+                size_t expected_step = result.frame_width * result.frame_channels * sizeof(unsigned char);
+                if (vis_frame.step != expected_step) {
+                    std::cerr << "Warning: vis_frame step mismatch, expected " << expected_step
+                        << ", got " << vis_frame.step << std::endl;
+                    vis_frame = vis_frame.clone(); // 强制创建连续副本
                 }
+
+
+                //if (frame_count % 10 != 0) { continue; }
+
                 std::string debug_image = "debug_frame_" + std::to_string(frame_count) + ".png";
                 cv::imwrite(debug_image, vis_frame);
                 std::cout << "保存调试图像: " << debug_image << std::endl;

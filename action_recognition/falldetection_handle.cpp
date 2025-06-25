@@ -64,13 +64,23 @@ extern "C" {
                 result->frame_width = cpp_result.visualized_frame.cols;
                 result->frame_height = cpp_result.visualized_frame.rows;
                 result->frame_channels = cpp_result.visualized_frame.channels();
-                size_t data_size = result->frame_width * result->frame_height * result->frame_channels;
+                size_t data_size = cpp_result.visualized_frame.total() * cpp_result.visualized_frame.channels() * sizeof(unsigned char);
+                size_t step = cpp_result.visualized_frame.step; // 获取实际步幅
                 result->visualized_frame_data = (unsigned char*)malloc(data_size);
                 if (!result->visualized_frame_data) {
                     std::cerr << "Failed to allocate visualized_frame_data" << std::endl;
-                    return -2; // 内存分配失败
+                    return -2;
                 }
-                std::memcpy(result->visualized_frame_data, cpp_result.visualized_frame.data, data_size);
+                // 按行复制，考虑步幅
+                for (int i = 0; i < result->frame_height; ++i) {
+                    std::memcpy(result->visualized_frame_data + i * (result->frame_width * result->frame_channels),
+                        cpp_result.visualized_frame.data + i * step,
+                        result->frame_width * result->frame_channels);
+                }
+                std::cout << "Copied visualized_frame: width=" << result->frame_width
+                    << ", height=" << result->frame_height
+                    << ", step=" << step
+                    << ", channels=" << result->frame_channels << std::endl;
             }
 
             // 转换 humans

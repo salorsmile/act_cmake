@@ -1,4 +1,3 @@
-
 #include "falldetection_pipeline.hpp"
 #include <stdexcept>
 #include <iostream>
@@ -196,6 +195,9 @@ ActionInferenceResult FalldetectionPipeline::inference(const cv::Mat& frame) {
     }
 
     cv::Mat frame_copy = frame.clone();
+
+    //cv::imwrite("./frame_copy.jpg", frame_copy);
+
     if (frame_copy.type() != CV_8UC3) {
         cv::cvtColor(frame_copy, frame_copy, cv::COLOR_YUV2BGR);
         if (frame_copy.type() != CV_8UC3) {
@@ -372,6 +374,7 @@ ActionInferenceResult FalldetectionPipeline::inference(const cv::Mat& frame) {
 
     if (args_.visualized_frame) {
         result.visualized_frame = visualize(frame_copy, humans_, online_targets_, labels_, probs_, args_.skeleton_visible);
+
     }
     else {
         result.visualized_frame = cv::Mat();
@@ -405,7 +408,7 @@ cv::Mat FalldetectionPipeline::visualize(cv::Mat frame, const std::vector<std::v
     const std::vector<float>& probs, bool vis_skeleton) {
     for (size_t i = 0; i < boxes.targets.size(); ++i) {
         const auto& box = boxes.targets[i];
-        // 从 tlbr 转换为 tlwh 以进行绘制
+     
         float x1 = box.tlbr[0];
         float y1 = box.tlbr[1];
         float x2 = box.tlbr[2];
@@ -422,5 +425,8 @@ cv::Mat FalldetectionPipeline::visualize(cv::Mat frame, const std::vector<std::v
             hrnet_pose_->drawPose(keypoints[i], frame);
         }
     }
+
+    //cv::imwrite("./frame_vis.jpg", frame);
     return frame;
+
 }
